@@ -2,10 +2,11 @@ import os
 from shutil import copyfile
 import json
 import sys
-from pysqlcipher3 import dbapi2 as sqlite
+from sqlcipher3 import dbapi2 as sqlite
 import hashlib
-import re
+import regex as re
 import json
+import unicodedata
 import time
 from jinja2 import Environment, FileSystemLoader
 
@@ -13,14 +14,15 @@ def get_conversations(conn):
     return conn.execute("SELECT id, name FROM conversations").fetchall()
 
 def get_messages(conn, conversation_id):
-    return conn.execute(f"SELECT json FROM messages where conversationId=\"{id}\" order by sent_at asc").fetchall()
+    return conn.execute(
+        f"SELECT json FROM messages where conversationId='{id}' order by sent_at asc"
+        ).fetchall()
 
 def get_encryption_key(config_file):
     try:
         print(f"Opening config from {config_file}")
         with open(config_file) as f:
-            config = json.load(f)
-            key = config["key"]
+            key = json.loads(f.read())["key"]
             print(f"Found key starting with: {key[0:4]}...")
             return key
     except FileNotFoundError:
@@ -34,9 +36,14 @@ def get_connection(database, key):
     try:
         print(f"Trying to open database {database} (using sqlcipher 4)")
         conn = sqlite.connect(database)
-        conn.execute(f"PRAGMA key = \"x'{key}'\"")
-        conn.execute("SELECT * FROM sqlite_master").fetchall()
-        return conn
+        c = conn.cursor()
+        c.execute(f"PRAGMA key = \"x'{key}'\"")
+        c.execute("PRAGMA cipher_page_size = 4096")
+        c.execute("PRAGMA kdf_iter = 256000")
+        c.execute("PRAGMA cipher_hmac_algorithm = HMAC_SHA512")
+        c.execute("PRAGMA cipher_kdf_algorithm = PBKDF2_HMAC_SHA512")
+        c.execute("SELECT * FROM sqlite_master").fetchall()
+        return c
     except sqlite.OperationalError as e:
         print(f"OperationalError: {e}")
         sys.exit(1)
@@ -44,7 +51,6 @@ def get_connection(database, key):
         try:
             print(f"Trying to open database {database} (using sqlcipher 3)")
             conn = sqlite.connect(database)
-            conn.execute(f"PRAGMA key = \"x'{key}'\"")
             conn.execute("PRAGMA cipher_compatibility = 3")
             conn.execute("SELECT * FROM sqlite_master").fetchall()
             return conn
@@ -64,14 +70,27 @@ def create_output_directory():
 
     return output_directory
 
+def _replace_unicode(s):
+
+    def _replace(X):
+        return unicodedata.name(X.group())+ "_"
+    
+    #pattern = re.compile(r"(?P<ch>\X)")
+    pattern = re.compile(r'[^-\w.]')
+    return pattern.sub(_replace, s)
+
+def _get_valid_filename(s):
+    s = str(s).strip(r"\s\+#").strip("<3").replace(' ', '_')
+    s = re.sub(r"\s|-", "_", s)
+    return _replace_unicode(s)
+
+def hash_name(name):
+    hash = hashlib.md5(name.encode('utf-8')).hexdigest()
+    return hash
+
 def get_conversation_filename(id, name):
 
-    def get_valid_filename(s):
-        s = str(s).strip().replace(' ', '_')
-        return re.sub(r'(?u)[^-\w.]', '', s)
-
-    hash = hashlib.md5(name.encode('utf-8')).hexdigest()
-    return f"{get_valid_filename(name)}_{hash}.html"
+    return f"{_get_valid_filename(name)}_{hash}.html"
 
 def create_html_index(conversations, export_dir, env):
     

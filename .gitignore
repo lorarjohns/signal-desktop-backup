@@ -6,3 +6,8 @@ pysqlcipher3/
 sqlcipher/
 
 signal_export_*/
+
+.eggs/
+.python-version
+data/
+signal_desktop_backup.egg-info/
