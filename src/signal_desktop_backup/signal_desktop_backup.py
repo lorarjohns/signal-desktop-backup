@@ -10,27 +10,31 @@ import unicodedata
 import time
 from jinja2 import Environment, FileSystemLoader
 
+
 def get_conversations(conn):
     return conn.execute("SELECT id, name FROM conversations").fetchall()
+
 
 def get_messages(conn, conversation_id):
     return conn.execute(
         f"SELECT json FROM messages where conversationId='{id}' order by sent_at asc"
-        ).fetchall()
+    ).fetchall()
+
 
 def get_encryption_key(config_file):
     try:
         print(f"Opening config from {config_file}")
-        with open(config_file) as f:
+        with open(config_file, "r") as f:
             key = json.loads(f.read())["key"]
             print(f"Found key starting with: {key[0:4]}...")
             return key
     except FileNotFoundError:
         print("Config file not found!")
-        sys.exit(1)
+        raise
     except KeyError:
         print("Config file does not contain key!")
-        sys.exit(1)  
+        raise
+
 
 def get_connection(database, key):
     try:
@@ -58,62 +62,73 @@ def get_connection(database, key):
             print(f"DatabaseError: {e}")
             sys.exit(1)
 
+
 def create_output_directory():
-    timestamp = time.strftime("%Y%m%d_%H%M%S") 
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_directory = os.path.join(os.getcwd(), f"signal_export_{timestamp}")
     os.mkdir(output_directory)
-    os.mkdir(os.path.join(output_directory, 'conversations'))
+    os.mkdir(os.path.join(output_directory, "conversations"))
 
-    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", 'style.css')
-    dest = os.path.join(output_directory, 'style.css')
+    src = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "templates", "style.css"
+    )
+    dest = os.path.join(output_directory, "style.css")
     copyfile(src, dest)
 
     return output_directory
 
-def _replace_unicode(s):
 
+def _replace_unicode(s):
     def _replace(X):
-        return unicodedata.name(X.group())+ "_"
-    
-    #pattern = re.compile(r"(?P<ch>\X)")
-    pattern = re.compile(r'[^-\w.]')
+        return unicodedata.name(X.group()) + "_"
+
+    # pattern = re.compile(r"(?P<ch>\X)")
+    pattern = re.compile(r"[^-\w.]")
     return pattern.sub(_replace, s)
 
+
 def _get_valid_filename(s):
-    s = str(s).strip(r"\s\+#").strip("<3").replace(' ', '_')
+    s = str(s).strip(r"\s\+#").strip("<3").replace(" ", "_")
     s = re.sub(r"\s|-", "_", s)
     return _replace_unicode(s)
 
+
 def hash_name(name):
-    hash = hashlib.md5(name.encode('utf-8')).hexdigest()
+    hash = hashlib.md5(name.encode("utf-8")).hexdigest()
     return hash
+
 
 def get_conversation_filename(id, name):
 
     return f"{_get_valid_filename(name)}_{hash}.html"
 
+
 def create_html_index(conversations, export_dir, env):
-    
+
     conversation_links = []
     for (id, name) in conversations:
         conversation_links.append((name, get_conversation_filename(id, name)))
-    
-    template = env.get_template('index.html')
-    output = template.render(timestamp=time.strftime("%Y-%m-%d %H:%M:%S"), conversation_links=conversation_links)
 
-    with open(os.path.join(export_dir, 'index.html'), 'w') as output_file:
+    template = env.get_template("index.html")
+    output = template.render(
+        timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+        conversation_links=conversation_links,
+    )
+
+    with open(os.path.join(export_dir, "index.html"), "w") as output_file:
         output_file.write(output)
         output_file.close()
+
 
 def parse_message_row(row_json):
     row = json.loads(row_json)
 
-    if row.get("type") in ['incoming', 'outgoing']:
+    if row.get("type") in ["incoming", "outgoing"]:
         mess_type = row.get("type")
     else:
         return None
 
-    attachments = ''
+    attachments = ""
     if "attachments" in row:
         for att in row.get("attachments"):
             attachments += "<br/>"
@@ -122,37 +137,50 @@ def parse_message_row(row_json):
             else:
                 attachments += "[Filename unknown]"
 
-    received = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(row["received_at"]/1000))
+    received = time.strftime(
+        "%Y-%m-%d %H:%M:%S", time.localtime(row["received_at"] / 1000)
+    )
     body = row.get("body")
 
     return (mess_type, received, body, attachments)
 
+
 def create_conversation_pages(conversations, output_directory, env):
     for (conversation_id, name) in conversations:
         print(f"Backing up '{name}'...")
-        
+
         try:
             messages = get_messages(conn, conversation_id)
             message_data = []
 
-            for (json) in messages:
+            for json in messages:
                 message_data.append(parse_message_row(json[0]))
-            
-            template = env.get_template('conversation.html')
+
+            template = env.get_template("conversation.html")
             output = template.render(name=name, messages=message_data)
 
-            with open(os.path.join(output_directory, "conversations", get_conversation_filename(conversation_id, name)), 'w') as output_file:
+            with open(
+                os.path.join(
+                    output_directory,
+                    "conversations",
+                    get_conversation_filename(conversation_id, name),
+                ),
+                "w",
+            ) as output_file:
                 output_file.write(output)
                 output_file.close()
 
         except Exception as e:
             print(f"Error: {e}")
 
+
 if __name__ == "__main__":
-    print(f'Starting Signal Desktop export...')
+    print(f"Starting Signal Desktop export...")
 
     if sys.platform == "darwin":
-        signal_data_path = os.path.join(os.path.expanduser("~"), 'Library', 'Application Support', 'Signal')
+        signal_data_path = os.path.join(
+            os.path.expanduser("~"), "Library", "Application Support", "Signal"
+        )
         config_file_path = os.path.join(signal_data_path, "config.json")
         database_file_path = os.path.join(signal_data_path, "sql", "db.sqlite")
     else:
@@ -163,11 +191,10 @@ if __name__ == "__main__":
     output_directory = create_output_directory()
 
     conversations = get_conversations(conn)
-    file_loader = FileSystemLoader(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates"))
+    file_loader = FileSystemLoader(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+    )
     env = Environment(loader=file_loader)
 
     create_html_index(conversations, output_directory, env)
     create_conversation_pages(conversations, output_directory, env)
-
-    
-

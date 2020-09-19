@@ -15,21 +15,20 @@ from setuptools import setup
 
 def read(*names, **kwargs):
     with io.open(
-        join(dirname(__file__), *names),
-        encoding=kwargs.get('encoding', 'utf8')
+        join(dirname(__file__), *names), encoding=kwargs.get("encoding", "utf8")
     ) as fh:
         return fh.read()
 
 
 setup(
-    name='signal_desktop_backup',
-    packages=find_packages('src'),
-    package_dir={'': 'src'},
-    py_modules=[splitext(basename(path))[0] for path in glob('src/**/*.py', recursive=True)],
+    name="signal_desktop_backup",
+    packages=find_packages("src"),
+    package_dir={"": "src"},
+    py_modules=[
+        splitext(basename(path))[0] for path in glob("src/**/*.py", recursive=True)
+    ],
     include_package_data=True,
     zip_safe=False,
     python_requires=">=3.6.*",
-    setup_requires=[
-        "pytest-runner"
-    ]
+    setup_requires=["pytest-runner"],
 )
