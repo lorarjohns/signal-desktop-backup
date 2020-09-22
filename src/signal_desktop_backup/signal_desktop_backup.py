@@ -15,8 +15,11 @@ logger = logging.getLogger("__file__")
 
 
 def get_conversations(conn):
-    
-    query = "SELECT id, name FROM conversations"
+    """
+    Use coalesce to avoid null values and substitute in phone
+    numbers for names where needed.
+    """
+    query = "SELECT id, COALESCE(name, e164) FROM conversations"
 
     return conn.execute(query).fetchall()
 
@@ -64,8 +67,8 @@ class EncryptionKey:
 
 class SQLCipherConnection:
     def __init__(self, database, key):
-        self.database = None
-        self.key = None
+        self.database = database
+        self.key = key
         self.conn = self.get_connection()
         self.config = self.get_config()
 
