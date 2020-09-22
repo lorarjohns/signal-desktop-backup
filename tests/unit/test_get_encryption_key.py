@@ -27,15 +27,12 @@ def test_returnsCorrectKey(monkeypatch):
 
 
 def test_raiseExceptionIfNotExistsFile(monkeypatch):
-    mock_o = mock_open(MagicMock(FileNotFoundError))
+    mock_o = MagicMock(side_effect=FileNotFoundError)
     monkeypatch.setattr("builtins.open", mock_o)
-    monkeypatch.setattr("io.TextIOBase.read", FileNotFoundError)
-    with raises(FileNotFoundError):
-        #with patch("builtins.open", mock_o):
-            #with patch("json.loads", side_effect=FileNotFoundError):
-            #with patch("io.TextIOBase.read", FileNotFoundError):
+    with raises(FileNotFoundError, match="Config file does not exist"):
         ek = EncryptionKey()
         assert ek.get_encryption_key("notafile")
+        assert mock_o.called_once_with("notafile", "r")
 
 
 def test_raiseExceptionIfNotExistsKey(monkeypatch):
@@ -45,4 +42,4 @@ def test_raiseExceptionIfNotExistsKey(monkeypatch):
             with patch("json.loads", return_value={}):
                 ek = EncryptionKey()
                 assert ek.get_encryption_key("config.json")
-                mock_o.assert_called_once_with("config.json", "r")
+                mock_o.assert_called_once_with("config.json", "r")  # TODO wrong number

@@ -9,6 +9,9 @@ import json
 import unicodedata
 import time
 from jinja2 import Environment, FileSystemLoader
+import logging
+
+logger = logging.getLogger("__file__")
 
 
 def get_conversations(conn):
@@ -29,19 +32,21 @@ class EncryptionKey:
     def _get_keyfile(self, config_file):
         try:
             f = open(config_file, "r")
-            print(f"Opening config from {config_file}")
-            return f
+            logger.info(f"Opening config from {config_file}")
+            return f is not None
         except FileNotFoundError as e:
             e.args = "Config file does not exist",
             self.e = e
     
     def _get_encryption_key_helper(self, config_file):
         try:
-            f = self._get_keyfile(config_file)
-            data = f.read()
-            key = json.loads(data)["key"]
-            f.close()
-            self.key = key
+            file_exists = self._get_keyfile(config_file)
+            if file_exists:
+                with open(config_file, "r") as f:
+                    data = f.read()
+                    key = json.loads(data)["key"]
+                    self.key = key
+            
         except KeyError as e:
             e.args = "Encryption key is missing from config file",
             self.e = e
@@ -49,9 +54,36 @@ class EncryptionKey:
     def get_encryption_key(self, config_file):
         self._get_encryption_key_helper(config_file)
         if self.e:
-            print(f"raising {type(self.e), self.e}")
+            logger.debug(f"raising {type(self.e), self.e}")
             raise self.e
         return self.key
+
+
+class SQLCipherConnection:
+    def __init__(self):
+        self.database = None
+        self.key = None
+        self.conn = None
+        self.config = self.get_config()
+
+    def get_config(self, version=4):
+        if version == 4:
+            return {
+                "key": self.key,
+                "cipher_page_size": 4096,
+                "kdf_iter": 256000,
+                "cipher_hmac_algorithm": "HMAC_SHA512",
+                "cipher_kdf_algorithm": "PBKDF2_HMAC_SHA512",
+            }
+        else:
+            raise NotImplementedError("Config needed for sqlite cipher 3")
+
+    def get_connection(self):
+        try:
+            conn = sqlite.connect(self.database)
+            self.conn = conn
+        except sqlite.DatabaseError as e:
+            self.e = e
 
 
 def get_connection(database, key):
@@ -194,7 +226,7 @@ def create_conversation_pages(conversations, output_directory, env):
 
 
 if __name__ == "__main__":
-    print(f"Starting Signal Desktop export...")
+    print("Starting Signal Desktop export...")
 
     if sys.platform == "darwin":
         signal_data_path = os.path.join(
