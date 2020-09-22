@@ -21,19 +21,34 @@ def get_messages(conn, conversation_id):
     ).fetchall()
 
 
-def get_encryption_key(config_file):
-    try:
-        print(f"Opening config from {config_file}")
-        with open(config_file, "r") as f:
+class EncryptionKey:
+    def __init__(self):
+        self.e = None
+        self.key = None
+
+    def _get_keyfile(self, config_file):
+        try:
+            f = open(config_file, "r")
+            print(f"Opening config from {config_file}")
+            return f
+        except FileNotFoundError as e:
+            self.e = e
+    
+    def _get_encryption_key_helper(self, config_file):
+        try:
+            f = self._get_keyfile(config_file)
             key = json.loads(f.read())["key"]
-            print(f"Found key starting with: {key[0:4]}...")
-            return key
-    except FileNotFoundError:
-        print("Config file not found!")
-        raise
-    except KeyError:
-        print("Config file does not contain key!")
-        raise
+            f.close()
+            self.key = key
+        except KeyError as e:
+            self.e = e
+
+    def get_encryption_key(self, config_file):
+        self._get_encryption_key_helper(config_file)
+        if self.e:
+            print(f"raising {type(self.e)}")
+            raise self.e
+        return self.key
 
 
 def get_connection(database, key):
@@ -80,8 +95,8 @@ def create_output_directory():
 
 def _replace_unicode(s):
     def _replace(X):
-        return unicodedata.name(X.group()) + "_"
-
+        # return unicodedata.name(X.group())
+        return re.sub(r"\s|$", "_", unicodedata.name(X.group()))
     # pattern = re.compile(r"(?P<ch>\X)")
     pattern = re.compile(r"[^-\w.]")
     return pattern.sub(_replace, s)
@@ -93,14 +108,15 @@ def _get_valid_filename(s):
     return _replace_unicode(s)
 
 
-def hash_name(name):
-    hash = hashlib.md5(name.encode("utf-8")).hexdigest()
-    return hash
+def _hash_name(name):
+    hashed = hashlib.md5(name.encode("utf-8")).hexdigest()
+    return hashed
 
 
-def get_conversation_filename(id, name):
-
-    return f"{_get_valid_filename(name)}_{hash}.html"
+def get_conversation_filename(name):
+    clean_name = _get_valid_filename(name)
+    hashed = _hash_name(clean_name)
+    return f"{clean_name}_{hashed}.html"
 
 
 def create_html_index(conversations, export_dir, env):
@@ -184,10 +200,10 @@ if __name__ == "__main__":
         config_file_path = os.path.join(signal_data_path, "config.json")
         database_file_path = os.path.join(signal_data_path, "sql", "db.sqlite")
     else:
-        print("Only MacOS tested so far, extiting.")
+        raise Exception("Only MacOS tested so far, extiting.") from TypeError
         sys.exit(0)
 
-    conn = get_connection(database_file_path, get_encryption_key(config_file_path))
+    conn = get_connection(database_file_path, EncryptionKey.get_encryption_key(config_file_path))
     output_directory = create_output_directory()
 
     conversations = get_conversations(conn)
