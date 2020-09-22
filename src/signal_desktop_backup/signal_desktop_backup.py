@@ -32,21 +32,24 @@ class EncryptionKey:
             print(f"Opening config from {config_file}")
             return f
         except FileNotFoundError as e:
+            e.args = "Config file does not exist",
             self.e = e
     
     def _get_encryption_key_helper(self, config_file):
         try:
             f = self._get_keyfile(config_file)
-            key = json.loads(f.read())["key"]
+            data = f.read()
+            key = json.loads(data)["key"]
             f.close()
             self.key = key
         except KeyError as e:
+            e.args = "Encryption key is missing from config file",
             self.e = e
 
     def get_encryption_key(self, config_file):
         self._get_encryption_key_helper(config_file)
         if self.e:
-            print(f"raising {type(self.e)}")
+            print(f"raising {type(self.e), self.e}")
             raise self.e
         return self.key
 
