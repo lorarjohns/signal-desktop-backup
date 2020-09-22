@@ -15,7 +15,13 @@ logger = logging.getLogger("__file__")
 
 
 def get_conversations(conn):
-    return conn.execute("SELECT id, name FROM conversations").fetchall()
+
+    #def _execute_query(query):
+        #return 
+    
+    query = "SELECT id, name FROM conversations"
+
+    return conn.execute(query).fetchall()
 
 
 def get_messages(conn, conversation_id):
@@ -60,10 +66,10 @@ class EncryptionKey:
 
 
 class SQLCipherConnection:
-    def __init__(self):
+    def __init__(self, database, key):
         self.database = None
         self.key = None
-        self.conn = None
+        self.conn = self.get_connection()
         self.config = self.get_config()
 
     def get_config(self, version=4):
