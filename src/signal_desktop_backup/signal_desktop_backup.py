@@ -15,9 +15,6 @@ logger = logging.getLogger("__file__")
 
 
 def get_conversations(conn):
-
-    #def _execute_query(query):
-        #return 
     
     query = "SELECT id, name FROM conversations"
 

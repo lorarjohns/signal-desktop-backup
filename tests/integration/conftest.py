@@ -18,10 +18,9 @@ def row_generator(datafile):
         #yield meta
 
 """populate a database for test"""
-@pytest.fixture(scope="function") 
+@pytest.fixture(scope="function", params=["c1", "c2", "c3"]) 
 def mock_db(tmp_path_factory, request):
 
-    pat = re.compile(r"(?<=/)[a-zA-Z]+")
     db_dir = tmp_path_factory.mktemp("dbs")
     db_path = db_dir / "test_db.sqlite"
     db = sqlite_utils.Database(db_path)
@@ -30,17 +29,36 @@ def mock_db(tmp_path_factory, request):
         datafile = "data/conversations.csv"
     elif request.param == "c2":
         datafile = "data/conversations_nonull.csv"
+    elif request.param == "c3":
+        datafile = "data/conversations_coalesced.csv"
     else:
         raise ValueError("Internal test config problem")
     
-    db[pat.search(datafile).group()].insert_all(
+    pat = re.compile(r"(?<=/)[a-zA-Z]+")
+    name_clean = pat.search(datafile).group()
+
+    db[name_clean].insert_all(
         list(row_generator(datafile)), pk="id")
     return db
 
+def db_data(param):
+    if param == "c1":
+        datafile = "data/conversations.csv"
+    elif param == "c2":
+        datafile = "data/conversations_nonull.csv"
+    elif param == "c3":
+        datafile = "data/conversations_coalesced.csv"
+    else:
+        raise ValueError("Internal test config problem")
+    
+    pat = re.compile(r"(?<=/)[a-zA-Z]+")
+    name_clean = pat.search(datafile).group()
+    return name_clean, list(row_generator(datafile))
 
-def pytest_generate_tests(metafunc):
-    if "mock_db" in metafunc.fixturenames:
-        metafunc.parametrize("mock_db", ["c1", "c2"], indirect=True)
+
+#def pytest_generate_tests(metafunc):
+  #  if "mock_db" in metafunc.fixturenames:
+  #      metafunc.parametrize("mock_db", ["c1", "c2", "c3"], indirect=True)
 
 
 
